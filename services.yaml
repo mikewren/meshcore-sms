@@ -1,0 +1,73 @@
+# MeshCore SMS Gateway Services
+
+send_sms:
+  name: Send SMS
+  description: Send an SMS message through the gateway
+  fields:
+    phone_number:
+      name: Phone Number
+      description: Recipient phone number with country code
+      required: true
+      example: "+1234567890"
+      selector:
+        text:
+    message:
+      name: Message
+      description: SMS message content
+      required: true
+      example: "Hello from Home Assistant"
+      selector:
+        text:
+          multiline: true
+
+broadcast_to_mesh:
+  name: Broadcast to MeshCore
+  description: Broadcast a message to all MeshCore users
+  fields:
+    message:
+      name: Message
+      description: Message to broadcast
+      required: true
+      example: "System maintenance at 10 PM"
+      selector:
+        text:
+          multiline: true
+
+set_rate_limit:
+  name: Set Rate Limit
+  description: Update the daily SMS rate limit for a user
+  fields:
+    user_id:
+      name: User ID
+      description: MeshCore user ID
+      required: true
+      example: "user123"
+      selector:
+        text:
+    limit:
+      name: Limit
+      description: New daily limit
+      required: true
+      example: 50
+      selector:
+        number:
+          min: 0
+          max: 1000
+          mode: box
+
+get_statistics:
+  name: Get Statistics
+  description: Get gateway usage statistics
+  fields:
+    period:
+      name: Period
+      description: Time period for statistics
+      required: false
+      default: "day"
+      selector:
+        select:
+          options:
+            - "hour"
+            - "day"
+            - "week"
+            - "month"
