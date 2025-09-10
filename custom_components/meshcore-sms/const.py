@@ -1,6 +1,6 @@
 """Constants for MeshCore SMS Gateway."""
 
-DOMAIN = "meshcore_sms"
+DOMAIN = "meshcore-sms"
 
 # Configuration keys
 CONF_ACCOUNT_SID = "account_sid"
