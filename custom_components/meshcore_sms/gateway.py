@@ -14,7 +14,7 @@ DOMAIN = "meshcore_sms"
 _LOGGER = logging.getLogger(__name__)
 
 # Phone number regex
-PHONE_REGEX = re.compile(r'^\+?[1-9]\d{1,14}": {
+PHONE_REGEX = re.compile(r'^\+?[1-9]\d{1,14}$': {
           "account_sid": "Your Twilio Account SID (starts with AC)",
           "auth_token": "Your Twilio Auth Token",
           "from_number": "Your Twilio phone number with country code (e.g., +1234567890)"
