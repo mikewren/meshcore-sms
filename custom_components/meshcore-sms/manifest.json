@@ -1,17 +1,15 @@
 {
   "domain": "meshcore_sms",
   "name": "MeshCore SMS Gateway",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "documentation": "https://github.com/mikewren/meshcore-sms",
   "issue_tracker": "https://github.com/mikewren/meshcore-sms/issues",
   "dependencies": ["meshcore"],
-  "dependencies": [],
   "after_dependencies": ["meshcore"],
   "codeowners": ["@mikewren"],
   "loggers": ["custom_components.meshcore_sms"],
   "requirements": ["twilio>=8.2.0"],
   "config_flow": true,
   "iot_class": "cloud_push",
-  "integration_type": "service",
-  "icon": "mdi:message"
+  "integration_type": "service"
 }
