@@ -1,0 +1,52 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Twilio Configuration",
+        "description": "Enter your Twilio credentials. You can find these in your Twilio Console.",
+        "data": {
+          "account_sid": "Account SID",
+          "auth_token": "Auth Token",
+          "from_number": "Twilio Phone Number"
+        },
+        "data_description": {
+          "bot_name": "MeshCore node name for the SMS bot (users will DM this bot)",
+          "daily_limit": "Maximum SMS messages per user per day",
+          "meshcore_channel": "Channel index (0-255) for broadcast messages",
+          "enable_broadcast": "Allow incoming SMS without @node_name to broadcast to channel",
+          "delivery_confirmation": "Send confirmation SMS back when message is delivered to MeshCore"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Twilio",
+      "invalid_auth": "Invalid authentication - check your Account SID and Auth Token",
+      "invalid_phone": "Phone number not found or not SMS capable in your Twilio account",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This phone number is already configured",
+      "meshcore_not_configured": "MeshCore integration must be installed and configured first. Please set up MeshCore before adding the SMS gateway."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gateway Options",
+        "description": "Update SMS gateway settings for {current_phone}\n\nBot name: {current_bot} (cannot be changed)",
+        "data": {
+          "daily_limit": "Daily SMS Limit",
+          "meshcore_channel": "MeshCore Channel Index",
+          "enable_broadcast": "Enable SMS Broadcast",
+          "delivery_confirmation": "Send Delivery Confirmations"
+        },
+        "data_description": {
+          "daily_limit": "Maximum SMS messages per user per day",
+          "meshcore_channel": "Channel index (0-255) for broadcast messages. Usually 0 for primary channel",
+          "enable_broadcast": "Allow incoming SMS without @node_name to broadcast to channel",
+          "delivery_confirmation": "Send confirmation SMS back when message is delivered to MeshCore"
+        }
+      }
+    }
+  }
+}

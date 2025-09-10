@@ -1,9 +1,10 @@
 {
+  "title": "MeshCore SMS Gateway",
   "config": {
     "step": {
       "user": {
-        "title": "MeshCore SMS: Twilio Configuration",
-        "description": "Enter your Twilio credentials. You can find these in your [Twilio Console]({twilio_console}).",
+        "title": "Twilio Configuration",
+        "description": "Enter your Twilio credentials. You can find these in your Twilio Console.",
         "data": {
           "account_sid": "Account SID",
           "auth_token": "Auth Token",
@@ -21,14 +22,16 @@
         "data": {
           "bot_name": "Bot Name",
           "daily_limit": "Daily SMS Limit",
+          "meshcore_channel": "MeshCore Channel",
           "enable_broadcast": "Enable SMS Broadcast",
           "delivery_confirmation": "Send Delivery Confirmations"
         },
         "data_description": {
-          "bot_name": "MeshCore username for the SMS bot (users will DM this bot)",
+          "bot_name": "MeshCore node name for the SMS bot (users will DM this bot)",
           "daily_limit": "Maximum SMS messages per user per day",
-          "enable_broadcast": "Allow incoming SMS without @username to broadcast to all",
-          "delivery_confirmation": "Send confirmation SMS when message is delivered to MeshCore"
+          "meshcore_channel": "Channel index (0-255) for broadcast messages",
+          "enable_broadcast": "Allow incoming SMS without @node_name to broadcast to channel",
+          "delivery_confirmation": "Send confirmation SMS back when message is delivered to MeshCore"
         }
       }
     },
@@ -47,14 +50,48 @@
     "step": {
       "init": {
         "title": "Gateway Options",
-        "description": "Update SMS gateway settings",
+        "description": "Update SMS gateway settings for {current_phone}\n\nBot name: {current_bot} (cannot be changed)",
         "data": {
-          "bot_name": "Bot Name",
           "daily_limit": "Daily SMS Limit",
+          "meshcore_channel": "MeshCore Channel Index",
           "enable_broadcast": "Enable SMS Broadcast",
           "delivery_confirmation": "Send Delivery Confirmations"
         }
       }
+    }
+  },
+  "services": {
+    "send_sms": {
+      "name": "Send SMS",
+      "description": "Send an SMS message through the gateway",
+      "fields": {
+        "phone_number": {
+          "name": "Phone Number",
+          "description": "Recipient phone number with country code"
+        },
+        "message": {
+          "name": "Message",
+          "description": "SMS message content"
+        }
+      }
+    },
+    "test_meshcore": {
+      "name": "Test MeshCore Message",
+      "description": "Test sending a message to MeshCore",
+      "fields": {
+        "recipient": {
+          "name": "Recipient",
+          "description": "MeshCore recipient (node name or 'all' for broadcast)"
+        },
+        "message": {
+          "name": "Message",
+          "description": "Message to send"
+        }
+      }
+    },
+    "get_webhook_info": {
+      "name": "Get Webhook Info",
+      "description": "Get the Twilio webhook URL and setup instructions"
     }
   }
 }

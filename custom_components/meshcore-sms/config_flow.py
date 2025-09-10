@@ -1,4 +1,4 @@
-"""Config flow for MeshCore SMS Gateway - MeshCore aware version."""
+"""Config flow for MeshCore SMS Gateway."""
 
 import logging
 import voluptuous as vol
@@ -6,7 +6,6 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
-from homeassistant.exceptions import HomeAssistantError
 
 DOMAIN = "meshcore_sms"
 
@@ -20,11 +19,13 @@ CONF_BOT_NAME = "bot_name"
 CONF_DAILY_LIMIT = "daily_limit"
 CONF_ENABLE_BROADCAST = "enable_broadcast"
 CONF_DELIVERY_CONFIRMATION = "delivery_confirmation"
+CONF_MESHCORE_CHANNEL = "meshcore_channel"
 
 # Defaults
 DEFAULT_DAILY_LIMIT = 50
-DEFAULT_ENABLE_BROADCAST = False
-DEFAULT_DELIVERY_CONFIRMATION = True
+DEFAULT_ENABLE_BROADCAST = True
+DEFAULT_DELIVERY_CONFIRMATION = False
+DEFAULT_MESHCORE_CHANNEL = 0
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -110,6 +111,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DAILY_LIMIT, default=DEFAULT_DAILY_LIMIT
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
                 vol.Optional(
+                    CONF_MESHCORE_CHANNEL, default=DEFAULT_MESHCORE_CHANNEL
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+                vol.Optional(
                     CONF_ENABLE_BROADCAST, default=DEFAULT_ENABLE_BROADCAST
                 ): cv.boolean,
                 vol.Optional(
@@ -126,6 +130,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DAILY_LIMIT, default=DEFAULT_DAILY_LIMIT
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
                 vol.Optional(
+                    CONF_MESHCORE_CHANNEL, default=DEFAULT_MESHCORE_CHANNEL
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+                vol.Optional(
                     CONF_ENABLE_BROADCAST, default=DEFAULT_ENABLE_BROADCAST
                 ): cv.boolean,
                 vol.Optional(
@@ -140,30 +147,35 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "phone_number": self._data[CONF_FROM_NUMBER],
                 "meshcore_info": f"MeshCore Device: {self._meshcore_info.get('device_name', 'Unknown')}",
+                "note": "Note: Bot name should match a MeshCore node name for receiving messages",
             }
         )
 
     async def _get_meshcore_info(self):
         """Get information from MeshCore integration."""
         try:
-            # Try to get MeshCore integration data
             meshcore_entries = self.hass.config_entries.async_entries("meshcore")
             if meshcore_entries:
                 meshcore_entry = meshcore_entries[0]
                 
-                # Get device info from MeshCore
                 if "meshcore" in self.hass.data:
-                    meshcore_data = self.hass.data["meshcore"].get(meshcore_entry.entry_id, {})
+                    meshcore_data = self.hass.data["meshcore"].get(meshcore_entry.entry_id)
                     
-                    # Extract useful information
-                    self._meshcore_info = {
-                        "connected": meshcore_data.get("connected", False),
-                        "device_name": meshcore_data.get("device_name") or meshcore_entry.data.get("device_name", "MeshCore Device"),
-                        "node_id": meshcore_data.get("node_id") or meshcore_entry.data.get("node_id"),
-                        "entry_id": meshcore_entry.entry_id,
-                    }
+                    if meshcore_data:
+                        self._meshcore_info = {
+                            "connected": True,
+                            "device_name": meshcore_entry.data.get("device_name", "MeshCore Device"),
+                            "node_id": meshcore_entry.data.get("node_id"),
+                            "entry_id": meshcore_entry.entry_id,
+                        }
+                        
+                        if hasattr(meshcore_data, 'data') and meshcore_data.data:
+                            if isinstance(meshcore_data.data, dict):
+                                self._meshcore_info.update({
+                                    "connected": meshcore_data.data.get("connected", True),
+                                    "device_name": meshcore_data.data.get("device_name") or self._meshcore_info["device_name"],
+                                })
                 else:
-                    # MeshCore integration exists but no runtime data yet
                     self._meshcore_info = {
                         "connected": False,
                         "device_name": meshcore_entry.data.get("device_name", "MeshCore Device"),
@@ -180,7 +192,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _get_bot_name_suggestions(self):
         """Get available bot names from MeshCore."""
         try:
-            # Check if MeshCore has a service to list available bot names
             if self.hass.services.has_service("meshcore", "list_bot_names"):
                 result = await self.hass.services.async_call(
                     "meshcore", 
@@ -190,14 +201,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 return result.get("bot_names", [])
             
-            # Check if MeshCore stores bot configuration
             if "meshcore" in self.hass.data:
                 meshcore_entries = self.hass.config_entries.async_entries("meshcore")
                 if meshcore_entries:
-                    meshcore_data = self.hass.data["meshcore"].get(meshcore_entries[0].entry_id, {})
-                    configured_bots = meshcore_data.get("configured_bots", [])
-                    if configured_bots:
-                        return configured_bots
+                    meshcore_data = self.hass.data["meshcore"].get(meshcore_entries[0].entry_id)
+                    
+                    if meshcore_data and hasattr(meshcore_data, 'data'):
+                        if isinstance(meshcore_data.data, dict):
+                            configured_bots = meshcore_data.data.get("configured_bots", [])
+                            if configured_bots:
+                                return configured_bots
                         
         except Exception as e:
             _LOGGER.debug("Could not get bot name suggestions: %s", e)
@@ -206,10 +219,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _suggest_bot_name(self):
         """Suggest a bot name based on MeshCore configuration."""
-        # Try to generate a unique bot name
         base_name = "sms_bot"
         
-        # Check if this name is already in use
         try:
             if self.hass.services.has_service("meshcore", "check_bot_name"):
                 counter = 0
@@ -228,7 +239,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception:
             pass
         
-        # Fallback to device-specific name
         if self._meshcore_info.get("node_id"):
             return f"sms_{self._meshcore_info['node_id'][-4:]}"
         
@@ -250,9 +260,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         """Manage options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            # Update the config entry with new options
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data={**self.config_entry.data, **user_input}
+            )
+            
+            # Reload the integration to apply changes
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            
+            return self.async_create_entry(title="", data={})
 
-        # Don't allow changing bot name in options - would break existing connections
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
@@ -260,6 +278,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_DAILY_LIMIT,
                     default=self.config_entry.data.get(CONF_DAILY_LIMIT, DEFAULT_DAILY_LIMIT),
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
+                vol.Optional(
+                    CONF_MESHCORE_CHANNEL,
+                    default=self.config_entry.data.get(CONF_MESHCORE_CHANNEL, DEFAULT_MESHCORE_CHANNEL),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
                 vol.Optional(
                     CONF_ENABLE_BROADCAST,
                     default=self.config_entry.data.get(CONF_ENABLE_BROADCAST, DEFAULT_ENABLE_BROADCAST),
@@ -271,5 +293,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             }),
             description_placeholders={
                 "current_bot": self.config_entry.data.get(CONF_BOT_NAME, "unknown"),
+                "current_phone": self.config_entry.data.get(CONF_FROM_NUMBER, "unknown"),
             }
         )

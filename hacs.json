@@ -1,0 +1,9 @@
+{
+  "name": "MeshCore SMS Gateway",
+  "render_readme": true,
+  "domain": "meshcore-sms",
+  "documentation": "https://github.com/mikewren/meshcore-sms",
+  "issue_tracker": "https://github.com/mikewren/meshcore-sms/issues",
+  "hacs": "1.6.0",
+  "iot_class": "cloud_push",
+}

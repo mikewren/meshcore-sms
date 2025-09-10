@@ -5,6 +5,7 @@
   "documentation": "https://github.com/mikewren/meshcore-sms",
   "issue_tracker": "https://github.com/mikewren/meshcore-sms/issues",
   "dependencies": ["meshcore"],
+  "dependencies": [],
   "after_dependencies": ["meshcore"],
   "codeowners": ["@mikewren"],
   "loggers": ["custom_components.meshcore_sms"],
