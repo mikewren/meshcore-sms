@@ -14,24 +14,30 @@ DOMAIN = "meshcore_sms"
 _LOGGER = logging.getLogger(__name__)
 
 # Phone number regex
-PHONE_REGEX = re.compile(r'^\+?[1-9]\d{1,14}$': {
-          "account_sid": "Your Twilio Account SID (starts with AC)",
-          "auth_token": "Your Twilio Auth Token",
-          "from_number": "Your Twilio phone number with country code (e.g., +1234567890)"
+PHONE_REGEX = re.compile(r'^\+?[1-9]\d{1,14}$')
+
+CONFIG_SCHEMA = {
+    "twilio_config": {
+        "title": "Twilio Configuration", 
+        "description": "Enter your Twilio credentials",
+        "data": {
+            "account_sid": "Your Twilio Account SID (starts with AC)",
+            "auth_token": "Your Twilio Auth Token", 
+            "from_number": "Your Twilio phone number with country code (e.g., +1234567890)"
         }
-      },
-      "gateway_settings": {
+    },
+    "gateway_settings": {
         "title": "Gateway Settings",
         "description": "Configure the SMS gateway for phone number {phone_number}",
         "data": {
-          "bot_name": "Bot Name",
-          "daily_limit": "Daily SMS Limit",
-          "meshcore_channel": "MeshCore Channel",
-          "enable_broadcast": "Enable SMS Broadcast",
-          "delivery_confirmation": "Send Delivery Confirmations"
-        },
-        "data_description)
-
+            "bot_name": "Bot Name",
+            "daily_limit": "Daily SMS Limit", 
+            "meshcore_channel": "MeshCore Channel",
+            "enable_broadcast": "Enable SMS Broadcast",
+            "delivery_confirmation": "Send Delivery Confirmations"
+        }
+    }
+}
 
 class MeshCoreSMSGateway:
     """MeshCore SMS Gateway - Simple version."""
