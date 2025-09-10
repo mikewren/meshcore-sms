@@ -20,7 +20,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MeshCore SMS Gateway from a config entry."""
     
     # Check if MeshCore integration is loaded
-    if "meshcore" not in hass.config.integrations:
+    if "meshcore" not in hass.data:
         _LOGGER.error("MeshCore integration is not loaded. Please install and configure it first.")
         raise ConfigEntryNotReady("MeshCore integration is required")
     
