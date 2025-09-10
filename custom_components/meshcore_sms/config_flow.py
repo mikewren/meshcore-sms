@@ -7,7 +7,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
-DOMAIN = "meshcore-sms"
+DOMAIN = "meshcore_sms"
 
 _LOGGER = logging.getLogger(__name__)
 

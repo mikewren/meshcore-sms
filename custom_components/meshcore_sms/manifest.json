@@ -1,7 +1,7 @@
 {
-  "domain": "meshcore-sms",
+  "domain": "meshcore_sms",
   "name": "MeshCore SMS Gateway",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "documentation": "https://github.com/mikewren/meshcore-sms",
   "issue_tracker": "https://github.com/mikewren/meshcore-sms/issues",
   "dependencies": ["meshcore"],
