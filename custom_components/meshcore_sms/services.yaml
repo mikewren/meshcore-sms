@@ -1,24 +1,30 @@
 # MeshCore SMS Gateway Services
-
 send_sms:
-  name: Send SMS
-  description: Send an SMS message through the gateway
+  name: Send SMS Message
+  description: Send an SMS message through the MeshCore SMS gateway
   fields:
     phone_number:
       name: Phone Number
-      description: Recipient phone number with country code
+      description: The phone number to send the SMS to (include country code, e.g., +1234567890)
       required: true
       example: "+1234567890"
       selector:
         text:
     message:
       name: Message
-      description: SMS message content
+      description: The SMS message to send
       required: true
-      example: "Hello from Home Assistant"
+      example: "Hello from Home Assistant!"
       selector:
         text:
           multiline: true
+    entry_id:
+      name: Gateway Entry ID
+      description: Specific gateway to use (optional, uses first available if not specified)
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
 
 test_meshcore:
   name: Test MeshCore Message

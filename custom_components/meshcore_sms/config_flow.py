@@ -1,298 +1,227 @@
-"""Config flow for MeshCore SMS Gateway."""
-
 import logging
 import voluptuous as vol
-
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.exceptions import HomeAssistantError
+from typing import Any, Dict, Optional
 
-DOMAIN = "meshcore_sms"
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# Constants for configuration
-CONF_ACCOUNT_SID = "account_sid"
-CONF_AUTH_TOKEN = "auth_token"
-CONF_FROM_NUMBER = "from_number"
-CONF_BOT_NAME = "bot_name"
-CONF_DAILY_LIMIT = "daily_limit"
-CONF_ENABLE_BROADCAST = "enable_broadcast"
-CONF_DELIVERY_CONFIRMATION = "delivery_confirmation"
-CONF_MESHCORE_CHANNEL = "meshcore_channel"
-
-# Defaults
-DEFAULT_DAILY_LIMIT = 50
-DEFAULT_ENABLE_BROADCAST = True
-DEFAULT_DELIVERY_CONFIRMATION = False
-DEFAULT_MESHCORE_CHANNEL = 0
-
-
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for MeshCore SMS Gateway."""
+class MeshCoreSMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for MeshCore SMS."""
 
     VERSION = 1
 
     def __init__(self):
-        """Initialize config flow."""
-        self._data = {}
+        """Initialize the config flow."""
         self._errors = {}
-        self._meshcore_info = {}
+        self._user_input = {}
 
-    async def async_step_user(self, user_input=None):
-        """Handle the initial step - Check MeshCore and get Twilio credentials."""
-        errors = {}
-        
-        # Check if MeshCore integration is configured
-        meshcore_entries = self.hass.config_entries.async_entries("meshcore")
-        if not meshcore_entries:
-            return self.async_abort(reason="meshcore_not_configured")
-        
-        # Get MeshCore integration data
-        if not self._meshcore_info:
-            await self._get_meshcore_info()
-        
+    async def async_step_user(
+        self, user_input: Optional[Dict[str, Any]] = None
+    ) -> FlowResult:
+        """Handle the initial step - Twilio credentials."""
         if user_input is not None:
-            # Basic validation
-            if not user_input[CONF_ACCOUNT_SID].startswith("AC"):
-                errors["base"] = "invalid_auth"
-            elif not user_input[CONF_FROM_NUMBER]:
-                errors["base"] = "invalid_phone"
-            else:
-                # Store the data and move to next step
-                self._data = user_input
-                _LOGGER.info("Twilio credentials validated, moving to gateway settings")
+            try:
+                # Validate the Twilio credentials
+                await self._validate_twilio_input(user_input)
+                
+                # Store the user input and move to next step
+                self._user_input = user_input
                 return await self.async_step_gateway_settings()
+                
+            except Exception as exception:
+                _LOGGER.error("Unexpected exception: %s", exception)
+                self._errors["base"] = "unknown"
 
-        # Show current MeshCore configuration info
-        description_placeholders = {
-            "meshcore_status": "✅ Connected" if self._meshcore_info.get("connected") else "⚠️ Not connected",
-            "meshcore_device": self._meshcore_info.get("device_name", "Unknown"),
-        }
+        # Build the schema for Twilio credentials only
+        data_schema = vol.Schema({
+            vol.Required("account_sid"): str,
+            vol.Required("auth_token"): str,
+            vol.Required("from_number"): str,
+        })
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({
-                vol.Required(CONF_ACCOUNT_SID): str,
-                vol.Required(CONF_AUTH_TOKEN): str,
-                vol.Required(CONF_FROM_NUMBER): str,
-            }),
-            errors=errors,
-            description_placeholders=description_placeholders,
+            data_schema=data_schema,
+            errors=self._errors,
+            description_placeholders={
+                "twilio_info": "Enter your Twilio account credentials"
+            }
         )
 
-    async def async_step_gateway_settings(self, user_input=None):
-        """Configure gateway settings."""
+    async def async_step_gateway_settings(
+        self, user_input: Optional[Dict[str, Any]] = None
+    ) -> FlowResult:
+        """Handle the gateway settings step."""
         if user_input is not None:
-            # Combine all data
-            self._data.update(user_input)
-            
-            # Create unique ID based on phone number
-            await self.async_set_unique_id(
-                f"{DOMAIN}_{self._data[CONF_FROM_NUMBER]}"
-            )
-            self._abort_if_unique_id_configured()
-            
-            # Create the entry
-            return self.async_create_entry(
-                title=f"SMS Gateway ({self._data[CONF_FROM_NUMBER]})",
-                data=self._data,
-            )
+            try:
+                # Validate gateway settings
+                await self._validate_gateway_input(user_input)
+                
+                # Combine both steps' data
+                combined_data = {**self._user_input, **user_input}
+                # Always use channel 0 - not exposed to user
+                combined_data["meshcore_channel"] = "0"
+                
+                # Create the config entry
+                return self.async_create_entry(
+                    title=f"SMS Gateway ({combined_data['from_number']})",
+                    data=combined_data,
+                )
+            except Exception as exception:
+                _LOGGER.error("Unexpected exception: %s", exception)
+                self._errors["base"] = "unknown"
 
-        # Get bot name suggestions from MeshCore
-        bot_suggestions = await self._get_bot_name_suggestions()
-        
-        # Create schema with bot name selector if we have suggestions
-        if bot_suggestions:
-            # If MeshCore provides available bot names, let user select
-            data_schema = vol.Schema({
-                vol.Required(CONF_BOT_NAME): vol.In(bot_suggestions),
-                vol.Optional(
-                    CONF_DAILY_LIMIT, default=DEFAULT_DAILY_LIMIT
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
-                vol.Optional(
-                    CONF_MESHCORE_CHANNEL, default=DEFAULT_MESHCORE_CHANNEL
-                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
-                vol.Optional(
-                    CONF_ENABLE_BROADCAST, default=DEFAULT_ENABLE_BROADCAST
-                ): cv.boolean,
-                vol.Optional(
-                    CONF_DELIVERY_CONFIRMATION, 
-                    default=DEFAULT_DELIVERY_CONFIRMATION
-                ): cv.boolean,
-            })
-        else:
-            # Fallback to text input with suggestion
-            suggested_name = await self._suggest_bot_name()
-            data_schema = vol.Schema({
-                vol.Required(CONF_BOT_NAME, default=suggested_name): str,
-                vol.Optional(
-                    CONF_DAILY_LIMIT, default=DEFAULT_DAILY_LIMIT
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
-                vol.Optional(
-                    CONF_MESHCORE_CHANNEL, default=DEFAULT_MESHCORE_CHANNEL
-                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
-                vol.Optional(
-                    CONF_ENABLE_BROADCAST, default=DEFAULT_ENABLE_BROADCAST
-                ): cv.boolean,
-                vol.Optional(
-                    CONF_DELIVERY_CONFIRMATION, 
-                    default=DEFAULT_DELIVERY_CONFIRMATION
-                ): cv.boolean,
-            })
+        # Build the schema for gateway settings
+        data_schema = vol.Schema({
+            vol.Optional("bot_name", default="SMS Bot"): str,
+            vol.Optional("daily_limit", default=100): vol.Coerce(int),
+            vol.Optional("enable_broadcast", default=True): bool,
+            vol.Optional("delivery_confirmation", default=False): bool,
+        })
 
         return self.async_show_form(
             step_id="gateway_settings",
             data_schema=data_schema,
+            errors=self._errors,
             description_placeholders={
-                "phone_number": self._data[CONF_FROM_NUMBER],
-                "meshcore_info": f"MeshCore Device: {self._meshcore_info.get('device_name', 'Unknown')}",
-                "note": "Note: Bot name should match a MeshCore node name for receiving messages",
+                "phone_number": self._user_input.get("from_number", ""),
+                "settings_info": "Configure gateway settings for your SMS integration"
             }
         )
 
-    async def _get_meshcore_info(self):
-        """Get information from MeshCore integration."""
-        try:
-            meshcore_entries = self.hass.config_entries.async_entries("meshcore")
-            if meshcore_entries:
-                meshcore_entry = meshcore_entries[0]
-                
-                if "meshcore" in self.hass.data:
-                    meshcore_data = self.hass.data["meshcore"].get(meshcore_entry.entry_id)
-                    
-                    if meshcore_data:
-                        self._meshcore_info = {
-                            "connected": True,
-                            "device_name": meshcore_entry.data.get("device_name", "MeshCore Device"),
-                            "node_id": meshcore_entry.data.get("node_id"),
-                            "entry_id": meshcore_entry.entry_id,
-                        }
-                        
-                        if hasattr(meshcore_data, 'data') and meshcore_data.data:
-                            if isinstance(meshcore_data.data, dict):
-                                self._meshcore_info.update({
-                                    "connected": meshcore_data.data.get("connected", True),
-                                    "device_name": meshcore_data.data.get("device_name") or self._meshcore_info["device_name"],
-                                })
-                else:
-                    self._meshcore_info = {
-                        "connected": False,
-                        "device_name": meshcore_entry.data.get("device_name", "MeshCore Device"),
-                        "node_id": meshcore_entry.data.get("node_id"),
-                        "entry_id": meshcore_entry.entry_id,
-                    }
-                    
-                _LOGGER.debug("MeshCore info: %s", self._meshcore_info)
-                
-        except Exception as e:
-            _LOGGER.warning("Could not get MeshCore info: %s", e)
-            self._meshcore_info = {"connected": False}
+    async def _validate_twilio_input(self, user_input: Dict[str, Any]) -> None:
+        """Validate the Twilio credentials."""
+        errors = {}
 
-    async def _get_bot_name_suggestions(self):
-        """Get available bot names from MeshCore."""
-        try:
-            if self.hass.services.has_service("meshcore", "list_bot_names"):
-                result = await self.hass.services.async_call(
-                    "meshcore", 
-                    "list_bot_names",
-                    blocking=True,
-                    return_response=True
-                )
-                return result.get("bot_names", [])
-            
-            if "meshcore" in self.hass.data:
-                meshcore_entries = self.hass.config_entries.async_entries("meshcore")
-                if meshcore_entries:
-                    meshcore_data = self.hass.data["meshcore"].get(meshcore_entries[0].entry_id)
-                    
-                    if meshcore_data and hasattr(meshcore_data, 'data'):
-                        if isinstance(meshcore_data.data, dict):
-                            configured_bots = meshcore_data.data.get("configured_bots", [])
-                            if configured_bots:
-                                return configured_bots
-                        
-        except Exception as e:
-            _LOGGER.debug("Could not get bot name suggestions: %s", e)
-        
-        return []
+        # Validate Twilio credentials format
+        account_sid = user_input.get("account_sid", "")
+        if not account_sid.startswith("AC") or len(account_sid) != 34:
+            errors["account_sid"] = "invalid_account_sid"
 
-    async def _suggest_bot_name(self):
-        """Suggest a bot name based on MeshCore configuration."""
-        base_name = "sms_bot"
-        
-        try:
-            if self.hass.services.has_service("meshcore", "check_bot_name"):
-                counter = 0
-                while counter < 10:
-                    test_name = base_name if counter == 0 else f"{base_name}_{counter}"
-                    result = await self.hass.services.async_call(
-                        "meshcore",
-                        "check_bot_name",
-                        {"name": test_name},
-                        blocking=True,
-                        return_response=True
-                    )
-                    if not result.get("exists", True):
-                        return test_name
-                    counter += 1
-        except Exception:
-            pass
-        
-        if self._meshcore_info.get("node_id"):
-            return f"sms_{self._meshcore_info['node_id'][-4:]}"
-        
-        return base_name
+        # Validate phone number format
+        from_number = user_input.get("from_number", "")
+        if not from_number.startswith("+") or len(from_number) < 10:
+            errors["from_number"] = "invalid_phone_number"
+
+        # Validate auth token
+        auth_token = user_input.get("auth_token", "")
+        if len(auth_token) != 32:
+            errors["auth_token"] = "invalid_auth_token"
+
+        if errors:
+            self._errors.update(errors)
+            raise InvalidConfigError(errors)
+
+    async def _validate_gateway_input(self, user_input: Dict[str, Any]) -> None:
+        """Validate the gateway settings."""
+        errors = {}
+
+        # Validate daily limit
+        daily_limit = user_input.get("daily_limit", 100)
+        if daily_limit < 1 or daily_limit > 1000:
+            errors["daily_limit"] = "invalid_daily_limit"
+
+        # Validate bot name
+        bot_name = user_input.get("bot_name", "").strip()
+        if len(bot_name) < 1 or len(bot_name) > 50:
+            errors["bot_name"] = "invalid_bot_name"
+
+        if errors:
+            self._errors.update(errors)
+            raise InvalidConfigError(errors)
 
     @staticmethod
+    @callback
     def async_get_options_flow(config_entry):
-        """Get options flow."""
-        return OptionsFlowHandler(config_entry)
+        """Get the options flow for this handler."""
+        return MeshCoreSMSOptionsFlow(config_entry)
 
 
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow."""
+class MeshCoreSMSOptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for MeshCore SMS."""
 
     def __init__(self, config_entry):
         """Initialize options flow."""
         self.config_entry = config_entry
+        self._errors = {}
 
-    async def async_step_init(self, user_input=None):
-        """Manage options."""
+    async def async_step_init(
+        self, user_input: Optional[Dict[str, Any]] = None
+    ) -> FlowResult:
+        """Manage the options."""
         if user_input is not None:
-            # Update the config entry with new options
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data={**self.config_entry.data, **user_input}
-            )
-            
-            # Reload the integration to apply changes
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            
-            return self.async_create_entry(title="", data={})
+            try:
+                # Validate the options
+                await self._validate_options(user_input)
+                return self.async_create_entry(title="", data=user_input)
+            except Exception as exception:
+                _LOGGER.error("Error updating options: %s", exception)
+                self._errors["base"] = "unknown"
+
+        options_schema = vol.Schema({
+            vol.Optional(
+                "bot_name", 
+                default=self.config_entry.options.get(
+                    "bot_name", 
+                    self.config_entry.data.get("bot_name", "SMS Bot")
+                )
+            ): str,
+            vol.Optional(
+                "daily_limit", 
+                default=self.config_entry.options.get(
+                    "daily_limit", 
+                    self.config_entry.data.get("daily_limit", 100)
+                )
+            ): vol.Coerce(int),
+            vol.Optional(
+                "enable_broadcast", 
+                default=self.config_entry.options.get(
+                    "enable_broadcast", 
+                    self.config_entry.data.get("enable_broadcast", True)
+                )
+            ): bool,
+            vol.Optional(
+                "delivery_confirmation", 
+                default=self.config_entry.options.get(
+                    "delivery_confirmation", 
+                    self.config_entry.data.get("delivery_confirmation", False)
+                )
+            ): bool,
+        })
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({
-                vol.Optional(
-                    CONF_DAILY_LIMIT,
-                    default=self.config_entry.data.get(CONF_DAILY_LIMIT, DEFAULT_DAILY_LIMIT),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
-                vol.Optional(
-                    CONF_MESHCORE_CHANNEL,
-                    default=self.config_entry.data.get(CONF_MESHCORE_CHANNEL, DEFAULT_MESHCORE_CHANNEL),
-                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
-                vol.Optional(
-                    CONF_ENABLE_BROADCAST,
-                    default=self.config_entry.data.get(CONF_ENABLE_BROADCAST, DEFAULT_ENABLE_BROADCAST),
-                ): cv.boolean,
-                vol.Optional(
-                    CONF_DELIVERY_CONFIRMATION,
-                    default=self.config_entry.data.get(CONF_DELIVERY_CONFIRMATION, DEFAULT_DELIVERY_CONFIRMATION),
-                ): cv.boolean,
-            }),
+            data_schema=options_schema,
+            errors=self._errors,
             description_placeholders={
-                "current_bot": self.config_entry.data.get(CONF_BOT_NAME, "unknown"),
-                "current_phone": self.config_entry.data.get(CONF_FROM_NUMBER, "unknown"),
+                "phone_number": self.config_entry.data.get("from_number", ""),
+                "options_info": "Update gateway settings (Channel 0 - Public)"
             }
         )
+
+    async def _validate_options(self, user_input: Dict[str, Any]) -> None:
+        """Validate the options."""
+        errors = {}
+
+        # Validate daily limit
+        daily_limit = user_input.get("daily_limit", 100)
+        if daily_limit < 1 or daily_limit > 1000:
+            errors["daily_limit"] = "invalid_daily_limit"
+
+        # Validate bot name
+        bot_name = user_input.get("bot_name", "").strip()
+        if len(bot_name) < 1 or len(bot_name) > 50:
+            errors["bot_name"] = "invalid_bot_name"
+
+        if errors:
+            self._errors.update(errors)
+            raise InvalidConfigError(errors)
+
+
+class InvalidConfigError(HomeAssistantError):
+    """Error to indicate there is invalid config."""
